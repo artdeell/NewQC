@@ -159,7 +159,9 @@ static void initDebugOutput() {
 #endif
 
 static bool internalInitRenderer(AAssetManager *assetManager) {
+#ifdef DEBUG
     initDebugOutput();
+#endif
     checkOVRMultiview();
     if(!lm_model_render_program_create(&rs.worldProgram)) return false;
     if(!rendertarget_blit_program_create(&rs.blitProgram)) return false;
@@ -290,8 +292,6 @@ void renderFrame(frame_begin_end_state_t *state) {
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, rs.framebuffer);
 
     calculateProjectionViewMatrices(state);
-
-    glUseProgram(rs.worldProgram.name);
 
     if((offset.x + extent.width) != rs.depthSize.width || (offset.y + extent.height) != rs.depthSize.height) {
         XrExtent2Di depthExtent = {(offset.x + extent.width), (offset.y + extent.height)};
