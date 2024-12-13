@@ -33,15 +33,24 @@ static const char* vertexProgram = "layout(std140, location = 0) uniform MatrixB
                                    "   gl_Position = (PV[PVIndex] * M) * vec4(vertPos, 1.0);"
                                    "   texCoord = vertTex;"
                                    "}";
-
+// We need to convert from sRGB to linear here because it appears that the external sampler uses the
+// sRGB color space, while the fragment color output is linear (converted back into sRGB by the GLES implementation
 static const char* fragmentProgram = "#version 300 es\n"
                                      "#extension GL_OES_EGL_image_external_essl3 : enable\n"
                                      "layout(location = 6) uniform samplerExternalOES renderSource;"
                                      "layout(location = 0) out vec4 fragColor;"
                                      "in vec2 texCoord;"
+                                     "vec4 toLinear(vec4 sRGB)\n"
+                                     "{\n"
+                                     "    bvec3 cutoff = lessThan(sRGB.rgb, vec3(0.04045));\n"
+                                     "    vec3 higher = pow((sRGB.rgb + vec3(0.055))/vec3(1.055), vec3(2.4));\n"
+                                     "    vec3 lower = sRGB.rgb/vec3(12.92);\n"
+                                     "\n"
+                                     "    return vec4(mix(higher, lower, cutoff), sRGB.a);\n"
+                                     "}"
                                      "void main() {"
                                      "   vec2 texInverted = vec2(texCoord.x, (texCoord.y * -1.0) + 1.0);"
-                                     "   fragColor = vec4(texture(renderSource, texInverted).xyz, 1);"
+                                     "   fragColor = toLinear(vec4(texture(renderSource, texInverted).xyz, 1));"
                                      "}";
 
 bool rendertarget_blit_program_create(rendertarget_blit_render_program_t* program) {
