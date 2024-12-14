@@ -81,6 +81,7 @@ bool createSuggestedBindings() {
     XrPath controllerPath;
     XR_FAILRETURN(xrStringToPath(xrinfo.instance, "/interaction_profiles/khr/simple_controller", &controllerPath), false);
     suggestBindings(controllerPath, bindings, 4);
+    return true;
 }
 
 bool createActionPoseSpace(XrSession session, XrAction xrAction, XrSpace xrSpace, XrPath subactionPath) {
