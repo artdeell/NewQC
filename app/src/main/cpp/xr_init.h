@@ -37,6 +37,7 @@ extern xr_state_t xrinfo;
 bool xriInitialize(android_jni_data_t* jniData);
 bool xriInitSession();
 bool xriStartSession();
+bool OPENXR_CHECK(XrResult result, char errorMessage[]);
 void xriEndSession();
 void xriFreeSession();
 void xriFree();

@@ -3,6 +3,7 @@
 //
 #include "xr_include.h"
 #include "xr_init.h"
+#include "xr_input.h"
 #include "gles_init.h"
 
 #include <string.h>

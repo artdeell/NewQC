@@ -12,6 +12,7 @@
 
 #define LOG_TAG __FILE_NAME__
 #include "log.h"
+#include "xr_input.h"
 
 static const XrCompositionLayerProjectionView defaultCompositionLayerProjectionView  = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
 static const XrView defaultView = {XR_TYPE_VIEW};
@@ -46,12 +47,14 @@ void freeBeginEndState(frame_begin_end_state_t* state) {
 }
 
 bool beginFrame(frame_begin_end_state_t* state) {
+    XrResult result;
     XrFrameWaitInfo frameWaitInfo  = {XR_TYPE_FRAME_WAIT_INFO};
     XrFrameState frameState = {XR_TYPE_FRAME_STATE};
 
     XR_FAILRETURN(xrWaitFrame(xrinfo.session, &frameWaitInfo, &frameState), false);
 
     state->displayTime = frameState.predictedDisplayTime;
+    pollActions(state->displayTime);
 
     XrFrameBeginInfo frameBegin = {XR_TYPE_FRAME_BEGIN_INFO};
 

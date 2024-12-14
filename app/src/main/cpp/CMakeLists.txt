@@ -19,6 +19,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         main.c
         xr_init.c
         xr_render.c
+        xr_input.c
         gles_init.c
         gles_shader.c
         lightmap_model_gles_program.c

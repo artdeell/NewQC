@@ -91,6 +91,7 @@ void makeContextNotCurrent() {
 }
 
 void destroyOpenGLES() {
+    LOGE("Destroying GLES Context!");
     eglDestroySurface(egl_info.display, egl_info.surface);
     eglDestroyContext(egl_info.display, egl_info.context);
     eglTerminate(egl_info.display);
