@@ -46,23 +46,16 @@ void freeBeginEndState(frame_begin_end_state_t* state) {
 }
 
 bool beginFrame(frame_begin_end_state_t* state) {
-    XrResult result;
     XrFrameWaitInfo frameWaitInfo  = {XR_TYPE_FRAME_WAIT_INFO};
     XrFrameState frameState = {XR_TYPE_FRAME_STATE};
-    result = xrWaitFrame(xrinfo.session, &frameWaitInfo, &frameState);
-    if(result != XR_SUCCESS) {
-        LOGI("xrWaitFrame failed: %i", result);
-        return false;
-    }
+
+    XR_FAILRETURN(xrWaitFrame(xrinfo.session, &frameWaitInfo, &frameState), false);
 
     state->displayTime = frameState.predictedDisplayTime;
 
     XrFrameBeginInfo frameBegin = {XR_TYPE_FRAME_BEGIN_INFO};
-    result = xrBeginFrame(xrinfo.session, &frameBegin);
-    if(result != XR_SUCCESS) {
-        LOGI("xrBeginFrame failed: %i", result);
-        return false;
-    }
+
+    XR_FAILRETURN(xrBeginFrame(xrinfo.session, &frameBegin), false);
 
     XrViewState viewState = {XR_TYPE_VIEW_STATE};
     XrViewLocateInfo locateInfo = {XR_TYPE_VIEW_LOCATE_INFO};
@@ -78,12 +71,7 @@ bool beginFrame(frame_begin_end_state_t* state) {
         memcpy(&views[i], &defaultView, sizeof(XrView));
     }
 
-    result = xrLocateViews(xrinfo.session, &locateInfo, &viewState, nViews, &nLocatedViews, views);
-
-    if(result != XR_SUCCESS) {
-        LOGI("xrLocateViews failed: %i", result);
-        return false;
-    }
+    XR_FAILRETURN(xrLocateViews(xrinfo.session, &locateInfo, &viewState, nViews, &nLocatedViews, views), false);
 
     assert(nLocatedViews == nViews);
 
@@ -92,16 +80,9 @@ bool beginFrame(frame_begin_end_state_t* state) {
     swapchainWaitInfo.timeout = XR_INFINITE_DURATION;
 
     XrSwapchain swapchain = xrinfo.renderTarget.swapchain;
-    result = xrAcquireSwapchainImage(swapchain, &acquireInfo, &state->frame.imageIndex);
-    if(result != XR_SUCCESS) {
-        LOGI("xrAcquireSwapchainImage failed: %i", result);
-        return false;
-    }
-    result = xrWaitSwapchainImage(swapchain, &swapchainWaitInfo);
-    if(result != XR_SUCCESS) {
-        LOGI("xrWaitSwapchainImage failed: %i", result);
-        return false;
-    }
+
+    XR_FAILRETURN(xrAcquireSwapchainImage(swapchain, &acquireInfo, &state->frame.imageIndex), false);
+    XR_FAILRETURN(xrWaitSwapchainImage(swapchain, &swapchainWaitInfo), false);
 
     XrRect2Di imageRect;
     imageRect.offset.x = 0;

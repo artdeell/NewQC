@@ -7,3 +7,19 @@
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#ifndef NEWQC_XR_EXTRA_MACROS
+#define NEWQC_XR_EXTRA_MACROS
+
+#define XR_FAIL(x, s) do { \
+    XrResult result = x; \
+    if(result != XR_SUCCESS) {   \
+        LOGE(#x" failed: %i", result); \
+        s; \
+    }\
+} while(0)
+
+#define XR_FAILGOTO(x, lb) XR_FAIL(x, goto lb)
+#define XR_FAILRETURN(x, rv) XR_FAIL(x, return rv)
+
+#endif

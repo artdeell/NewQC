@@ -47,34 +47,25 @@ static bool createXrInstance(android_jni_data_t* jniData) {
     strcpy(createInfo.applicationInfo.applicationName, "HelloXR");
     createInfo.applicationInfo.apiVersion = XR_API_VERSION_1_0;
 
-    XrResult result;
-
-    result = xrCreateInstance(&createInfo, &xrinfo.instance);
-
-    if(result != XR_SUCCESS) {
-        LOGE("XrInstance creation failed: %i", result);
-        return false;
-    }
+    XR_FAILRETURN(xrCreateInstance(&createInfo, &xrinfo.instance), false);
 
     XrSystemGetInfo systemInfo = {XR_TYPE_SYSTEM_GET_INFO};
     systemInfo.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-    result = xrGetSystem(xrinfo.instance, &systemInfo, &xrinfo.systemId);
-    if(result != XR_SUCCESS) {
-        LOGE("Failed to get XrSystemId: %i", result);
-        xrDestroyInstance(xrinfo.instance);
-        return false;
-    }
+
+    XR_FAILGOTO(xrGetSystem(xrinfo.instance, &systemInfo, &xrinfo.systemId), destroy_instance);
 
     return true;
+    destroy_instance:
+    xrDestroyInstance(xrinfo.instance);
+    return false;
 }
 
 static bool getXrGraphicsRequirements(XrGraphicsRequirementsOpenGLESKHR* graphicsRequirements) {
-    XrResult result;
     PFN_xrGetOpenGLESGraphicsRequirementsKHR xrGetOpenGlesGraphicsRequirements;
-    result = xrGetInstanceProcAddr(xrinfo.instance, "xrGetOpenGLESGraphicsRequirementsKHR", (PFN_xrVoidFunction*)&xrGetOpenGlesGraphicsRequirements);
-    if(result != XR_SUCCESS) return false;
-    result = xrGetOpenGlesGraphicsRequirements(xrinfo.instance, xrinfo.systemId, graphicsRequirements);
-    if(result != XR_SUCCESS) return false;
+    XR_FAILRETURN(
+            xrGetInstanceProcAddr(xrinfo.instance,"xrGetOpenGLESGraphicsRequirementsKHR",(PFN_xrVoidFunction*)&xrGetOpenGlesGraphicsRequirements),
+            false);
+    XR_FAILRETURN(xrGetOpenGlesGraphicsRequirements(xrinfo.instance, xrinfo.systemId, graphicsRequirements), false);
     return true;
 }
 
@@ -93,7 +84,7 @@ static bool initializeGLESSession() {
 
     if(graphicsRequirements.minApiVersionSupported > currentApiVersion) {
         LOGE("OpenGL ES version %i.%i not supported by OpenXR runtime", major, minor);
-        goto fail;
+        return false;
     }
 
     XrGraphicsBindingOpenGLESAndroidKHR graphicsBindingOpenGLES = {XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR};
@@ -105,47 +96,30 @@ static bool initializeGLESSession() {
     sessionCreateInfo.next = &graphicsBindingOpenGLES;
     sessionCreateInfo.systemId = xrinfo.systemId;
 
-    if(xrCreateSession(xrinfo.instance, &sessionCreateInfo, &xrinfo.session) != XR_SUCCESS) {
-        LOGE("%s","Failed to create XR session");
-    }
+    XR_FAILRETURN(xrCreateSession(xrinfo.instance, &sessionCreateInfo, &xrinfo.session), false);
     return true;
-    fail:
-    destroyOpenGLES();
-    return false;
 }
 
 static bool createReferenceSpace() {
-    XrResult result;
     XrReferenceSpaceCreateInfo referenceSpaceCreateInfo = {XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
     referenceSpaceCreateInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
     referenceSpaceCreateInfo.poseInReferenceSpace.orientation.w = 1;
-    result = xrCreateReferenceSpace(xrinfo.session, &referenceSpaceCreateInfo, &xrinfo.localReferenceSpace);
-    if(result != XR_SUCCESS) {
-        LOGE("Failed to create local reference space: %i", result);
-        return false;
-    }
+    XR_FAILRETURN(xrCreateReferenceSpace(xrinfo.session, &referenceSpaceCreateInfo, &xrinfo.localReferenceSpace), false);
     return true;
 }
 static bool createViewSurface() {
-    XrResult result;
     xrinfo.configurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     uint32_t viewCount;
-    result = xrEnumerateViewConfigurationViews(xrinfo.instance, xrinfo.systemId, xrinfo.configurationType, 0, &viewCount, NULL);
-    if(result != XR_SUCCESS) {
-        LOGE("Failed to enumerate configuration views: %i", result);
-        return false;
-    }
+
+    XR_FAILRETURN(xrEnumerateViewConfigurationViews(xrinfo.instance, xrinfo.systemId, xrinfo.configurationType, 0, &viewCount, NULL), false);
+
     XrViewConfigurationView configurationViews[viewCount];
     for(uint32_t i = 0; i < viewCount; i++) {
         XrViewConfigurationView defaultConfigView = {XR_TYPE_VIEW_CONFIGURATION_VIEW};
         memcpy(&configurationViews[i], &defaultConfigView, sizeof(XrViewConfigurationView));
     }
-    result = xrEnumerateViewConfigurationViews(xrinfo.instance, xrinfo.systemId, xrinfo.configurationType, viewCount, &viewCount, configurationViews);
-    if(result != XR_SUCCESS) {
-        LOGE("Failed to enumerate configuration views: %i", result);
-        return false;
-    }
 
+    XR_FAILRETURN(xrEnumerateViewConfigurationViews(xrinfo.instance, xrinfo.systemId, xrinfo.configurationType, viewCount, &viewCount, configurationViews), false);
 
     const XrViewConfigurationView *viewConfig = &configurationViews[0];
     uint32_t width = viewConfig->recommendedImageRectWidth;
@@ -162,36 +136,23 @@ static bool createViewSurface() {
     swapchainCreateInfo.mipCount = 1;
     swapchainCreateInfo.sampleCount = 1;
 
-    result = xrCreateSwapchain(xrinfo.session, &swapchainCreateInfo, &swapchain);
-
-    if (result != XR_SUCCESS) {
-        LOGE("Failed to create swapchain: %i", result);
-        return false;
-    }
+    XR_FAILRETURN(xrCreateSwapchain(xrinfo.session, &swapchainCreateInfo, &swapchain), false);
 
     uint32_t imageCount = 0;
-    result = xrEnumerateSwapchainImages(swapchain, 0, &imageCount, NULL);
+    XrResult xrEnumerateSwapchainImages_result = xrEnumerateSwapchainImages(swapchain, 0, &imageCount, NULL);
     // Even if xrEnumerateSwapchainImages fails, this will still initialize with a size of 0
     // It wouldn't matter though since if the call fails we go straight to resource cleanup
     XrSwapchainImageOpenGLESKHR glesImages[imageCount];
 
-    if (result != XR_SUCCESS) {
-        LOGE("Failed to enumerate images on swapchain: %i", result);
-        goto free_swapchain;
-    }
+    XR_FAILRETURN(xrEnumerateSwapchainImages_result, false);
 
     for (uint32_t j = 0; j < imageCount; j++) {
         XrSwapchainImageOpenGLESKHR defaultImage = {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR};
         memcpy(&glesImages[j], &defaultImage, sizeof(XrSwapchainImageOpenGLESKHR));
     }
 
-    result = xrEnumerateSwapchainImages(swapchain, imageCount, &imageCount,
-                                        (XrSwapchainImageBaseHeader *) &glesImages);
-
-    if (result != XR_SUCCESS) {
-        LOGE("Failed to enumerate images on swapchain: %i", result);
-        goto free_swapchain;
-    }
+    XR_FAILGOTO(xrEnumerateSwapchainImages(swapchain, imageCount, &imageCount,
+                                           (XrSwapchainImageBaseHeader *) &glesImages), free_swapchain);
 
     xrinfo.renderTarget.swapchainTextures = calloc(imageCount, sizeof(GLuint));
 
@@ -213,11 +174,7 @@ static bool createViewSurface() {
 bool xriStartSession() {
     XrSessionBeginInfo beginInfo = {XR_TYPE_SESSION_BEGIN_INFO};
     beginInfo.primaryViewConfigurationType = xrinfo.configurationType;
-    XrResult result = xrBeginSession(xrinfo.session, &beginInfo);
-    if(result != XR_SUCCESS) {
-        LOGE("Failed to start session: %i", result);
-        return false;
-    }
+    XR_FAILRETURN(xrBeginSession(xrinfo.session, &beginInfo), false);
     xrinfo.hasSession = true;
     return true;
 }
