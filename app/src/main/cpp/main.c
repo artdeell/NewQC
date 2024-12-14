@@ -107,6 +107,8 @@ static void* main_loop(void* data) {
     createDefaultActions();
     createSuggestedBindings();
     if(!xriInitSession()) goto free_xri;
+    createActionPoses();
+    attachActionSet();
 
     frame_begin_end_state_t state;
 

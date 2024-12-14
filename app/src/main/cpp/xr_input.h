@@ -17,8 +17,8 @@ extern xr_input_t xrInput;
 bool pollActions(XrTime predictedTime);
 bool attachActionSet();
 bool createActionSet();
-void createDefaultActions();
-void createSuggestedBindings();
+bool createDefaultActions();
+bool createSuggestedBindings();
 void createActionPoses();
 
 #endif //NEWQC_XR_INPUT_H

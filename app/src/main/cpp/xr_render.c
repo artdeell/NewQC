@@ -47,7 +47,6 @@ void freeBeginEndState(frame_begin_end_state_t* state) {
 }
 
 bool beginFrame(frame_begin_end_state_t* state) {
-    XrResult result;
     XrFrameWaitInfo frameWaitInfo  = {XR_TYPE_FRAME_WAIT_INFO};
     XrFrameState frameState = {XR_TYPE_FRAME_STATE};
 
