@@ -276,8 +276,6 @@ static void drawPass(GLuint projIndex) {
 
     drawModel(rs.worldModel, projIndex);
     drawModel(rs.targetRectModel, projIndex);
-
-    glFinish();
 }
 
 GLuint getRenderTargetName() {
