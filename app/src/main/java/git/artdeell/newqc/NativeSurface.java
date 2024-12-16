@@ -18,8 +18,6 @@ public class NativeSurface extends FrameLayout implements Choreographer.FrameCal
     public NativeSurface(Context context) {
         super(context);
         choreographer = Choreographer.getInstance();
-        choreographer.postFrameCallback(this);
-
     }
 
     @Override
