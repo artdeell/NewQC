@@ -24,6 +24,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gles_shader.c
         lightmap_model_gles_program.c
         rendertarget_blit_program.c
+        singlecolor_program.c
         ktx_texture.c
         multiview_detect.c
         asset_buffer_read.c
