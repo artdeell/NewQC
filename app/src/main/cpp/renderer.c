@@ -226,6 +226,7 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
     checkOVRMultiview();
     if(!lm_model_render_program_create(&rs.worldProgram)) return false;
     if(!rendertarget_blit_program_create(&rs.blitProgram)) return false;
+    if(!singlecolor_program_create(&rs.singlecolorProgram)) return false;
 
     assert(rs.worldProgram.u.matrixBlockBinding == rs.blitProgram.u.matrixBlockBinding);
     if(!mv.hasMultiview) {
@@ -274,6 +275,7 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0, 1, 0, 1);
+    glLineWidth(4);
     GL_RETURN(true, false, "internalInitRenderer failed: %x", error);
 }
 
