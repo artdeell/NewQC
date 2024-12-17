@@ -5,6 +5,7 @@
 #include "renderer.h"
 #include "lightmap_model_gles_program.h"
 #include "rendertarget_blit_program.h"
+#include "singlecolor_program.h"
 #include "asset_buffer_read.h"
 #include "ktx_texture.h"
 #include "gl_safepoint.h"
@@ -26,6 +27,7 @@ typedef struct {
     GLuint vbo;
     GLuint vao;
     GLuint program;
+    GLenum drawMode;
     GLuint elementCount;
 } model_t;
 
@@ -36,9 +38,10 @@ typedef struct {
 
 struct {
     texture_t atlas, light, surface;
-    model_t worldModel, targetRectModel;
+    model_t worldModel, targetRectModel, line;
     world_model_render_program_t worldProgram;
     rendertarget_blit_render_program_t blitProgram;
+    singlecolor_render_program_t singlecolorProgram;
     XrExtent2Di depthSize;
     GLuint framebuffer, depthOutput, matrixBuffer;
 } rs;
@@ -114,6 +117,63 @@ static bool initTvModelDrawLayout(model_t *model, size_t modeLength, const rende
     GL_RETURN(true, false, "initTvModelDrawLayout failed: %x", error);
 }
 
+static bool initLineModelDrawLayout(model_t *model, size_t modeLength, const singlecolor_render_program_t program) {
+    GL_SAFEPOINT;
+    glGenVertexArrays(1, &model->vao);
+    glBindVertexArray(model->vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, model->vbo);
+
+    glEnableVertexAttribArray(program.v.position);
+    glEnableVertexAttribArray(program.v.color);
+
+    GLsizei vertexSize = 6 * sizeof(GLfloat);
+    const void* positionOffset = (const void*)(0 * sizeof(GLfloat));
+    const void* colorOffset = (const void*)(3 * sizeof(GLfloat));
+
+    glVertexAttribPointer(program.v.position, 3, GL_FLOAT, GL_FALSE, vertexSize, positionOffset);
+    glVertexAttribPointer(program.v.color, 3, GL_FLOAT, GL_FALSE, vertexSize, colorOffset);
+
+    model->program = program.name;
+    model->elementCount = modeLength / vertexSize;
+    LOGI("MDDL element count: %i size %lu", model->elementCount, modeLength);
+
+    GL_RETURN(true, false, "initLineModelDrawLayout failed: %x", error);
+}
+
+static bool createLineModel(model_t *model) {
+    size_t modelLength = sizeof(GLfloat) * 12;
+    GL_SAFEPOINT;
+    glGenBuffers(1, &model->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, model->vbo);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr) modelLength, NULL, GL_DYNAMIC_DRAW);
+    GLenum error = glGetError();
+    if(error != GL_NO_ERROR) {
+        LOGE("Failed to create line model VBO: %x", error);
+    }
+    if(!initLineModelDrawLayout(model, modelLength, rs.singlecolorProgram)) return false;
+    model->drawMode = GL_LINES;
+    return true;
+}
+
+static void uploadLineModelData(model_t *model, XrVector3f color, XrVector3f startPos, XrVector3f endPos) {
+    GLfloat dataFloats[12];
+    dataFloats[0] = startPos.x;
+    dataFloats[1] = startPos.y;
+    dataFloats[2] = startPos.z;
+    dataFloats[3] = color.x;
+    dataFloats[4] = color.y;
+    dataFloats[5] = color.z;
+    dataFloats[6] = endPos.x;
+    dataFloats[7] = endPos.y;
+    dataFloats[8] = endPos.z;
+    dataFloats[9] = color.x;
+    dataFloats[10] = color.y;
+    dataFloats[11] = color.z;
+    glBindBuffer(GL_ARRAY_BUFFER, model->vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(dataFloats), dataFloats);
+}
+
 static bool loadModelDrawData(model_t* model, asset_info_t* assetInfo, off64_t *size) {
     off64_t length;
     void* buffer = readAssetToBuffer(assetInfo, &length);
@@ -127,6 +187,7 @@ static bool loadModelDrawData(model_t* model, asset_info_t* assetInfo, off64_t *
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr) length, buffer, GL_STATIC_DRAW);
     *size = length;
     free(buffer);
+    model->drawMode = GL_TRIANGLES;
     GL_RETURN(true, false, "loadModelDrawData failed: %x", error);
 }
 
@@ -185,6 +246,7 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
         if(!loadModelDrawData(&rs.targetRectModel, &modelAssetInfo, &modelLength)) return false;
         if(!initTvModelDrawLayout(&rs.targetRectModel, (size_t) modelLength, rs.blitProgram)) return false;
     }
+    createLineModel(&rs.line);
     GL_SAFEPOINT;
 
     const float mat_array[3*16*sizeof(GLfloat)];
@@ -268,7 +330,7 @@ static void drawModel(const model_t model, GLuint projIndex) {
     glUseProgram(model.program);
     if(projIndex != -1) glUniform1ui(rs.worldProgram.u.projectionIndex, projIndex);
     glBindVertexArray(model.vao);
-    glDrawArrays(GL_TRIANGLES, 0, model.elementCount);
+    glDrawArrays(model.drawMode, 0, model.elementCount);
 }
 
 static void drawPass(GLuint projIndex) {
@@ -276,6 +338,7 @@ static void drawPass(GLuint projIndex) {
 
     drawModel(rs.worldModel, projIndex);
     drawModel(rs.targetRectModel, projIndex);
+    drawModel(rs.line, projIndex);
 }
 
 GLuint getRenderTargetName() {
@@ -295,6 +358,14 @@ void renderFrame(frame_begin_end_state_t *state) {
         XrExtent2Di depthExtent = {(offset.x + extent.width), (offset.y + extent.height)};
         resizeDepthBuffers(depthExtent);
     }
+
+    {
+        XrVector3f lineColor = {1, 0, 0};
+        XrVector3f start = {3, 8, 21};
+        XrVector3f end = {-5, 4, 21};
+        uploadLineModelData(&rs.line, lineColor, start, end);
+    }
+
 
     glViewport(offset.x, offset.y, extent.width, extent.height);
 

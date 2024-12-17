@@ -14,6 +14,7 @@
 
 #include "multiview_detect.h"
 #include "asset_buffer_read.h"
+#include "xr_input.h"
 #include <android/asset_manager_jni.h>
 
 //
@@ -102,7 +103,12 @@ static void* main_loop(void* data) {
     if(!initRenderer(g_assetManager)) return NULL;
     if(!createSurfaceTexture(env, getRenderTargetName())) goto destroy_gles;
     if(!xriInitialize(&jniData)) goto destroy_gles;
+    createActionSet();
+    createDefaultActions();
+    createSuggestedBindings();
     if(!xriInitSession()) goto free_xri;
+    createActionPoses();
+    attachActionSet();
 
     frame_begin_end_state_t state;
 
