@@ -14,7 +14,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
 
 import java.lang.ref.WeakReference;
 
@@ -67,10 +66,10 @@ public class MainActivity extends Activity {
     private void createNativeView(SurfaceTexture surfaceTexture, int w, int h) {
 
         nativeSurface = new NativeSurface(this);
-        nativeSurface.setSurfaceTexture(surfaceTexture, w, h);
+        nativeSurface.setSurfaceTexture(surfaceTexture);
 
         WebView webView = new WebView(this);
-        nativeSurface.addView(webView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        nativeSurface.setChildView(webView);
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
