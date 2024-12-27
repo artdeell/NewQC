@@ -28,11 +28,22 @@ static void loaderInitialize(android_jni_data_t* jniData) {
     }
 }
 
+typedef XrResult (*pXrEnumerateDisplayRefreshRatesFB)(
+        XrSession                                   session,
+        uint32_t                                    displayRefreshRateCapacityInput,
+        uint32_t*                                   displayRefreshRateCountOutput,
+        float*                                      displayRefreshRates);
+
+typedef XrResult (*pXrRequestDisplayRefreshRateFB)(
+        XrSession                                   session,
+        float                                       displayRefreshRate);
+
 static bool createXrInstance(android_jni_data_t* jniData) {
 
     static const char* instanceExtensions[] = {
             XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
-            XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME
+            XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
+            XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME
     };
 
     XrInstanceCreateInfoAndroidKHR androidCreateInfo = {XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR};
@@ -97,6 +108,27 @@ static bool initializeGLESSession() {
     sessionCreateInfo.systemId = xrinfo.systemId;
 
     XR_FAILRETURN(xrCreateSession(xrinfo.instance, &sessionCreateInfo, &xrinfo.session), false);
+    return true;
+}
+
+static bool setRefreshRate() {
+    pXrEnumerateDisplayRefreshRatesFB xrEnumerateDisplayRefreshRatesFB;
+    XR_FAILRETURN(xrGetInstanceProcAddr(xrinfo.instance, "xrEnumerateDisplayRefreshRatesFB", (PFN_xrVoidFunction*)&xrEnumerateDisplayRefreshRatesFB), false);
+
+    uint32_t displayRefreshRateCount;
+    XR_FAILRETURN(xrEnumerateDisplayRefreshRatesFB(xrinfo.session, 0, &displayRefreshRateCount, NULL), false);
+
+    float displayRefreshRates[displayRefreshRateCount];
+    XR_FAILRETURN(xrEnumerateDisplayRefreshRatesFB(xrinfo.session, displayRefreshRateCount, &displayRefreshRateCount, displayRefreshRates), false);
+
+    pXrRequestDisplayRefreshRateFB xrRequestDisplayRefreshRateFB;
+    XR_FAILRETURN(xrGetInstanceProcAddr(xrinfo.instance, "xrRequestDisplayRefreshRateFB", (PFN_xrVoidFunction*)&xrRequestDisplayRefreshRateFB), false);
+
+    for (uint32_t i = 0; i < displayRefreshRateCount; i++) {
+        LOGI("Display refresh rate: %f", displayRefreshRates[i]);
+    }
+
+    XR_FAILRETURN(xrRequestDisplayRefreshRateFB(xrinfo.session, displayRefreshRates[displayRefreshRateCount -1]), false);
     return true;
 }
 
@@ -190,6 +222,7 @@ bool xriInitSession() {
     for(int j = 0; j < xrinfo.renderTarget.swapchainTextureCount; j++) {
         LOGI("Swapchain texture: %i", xrinfo.renderTarget.swapchainTextures[j]);
     }
+    setRefreshRate();
     xrinfo.hasSession = true;
     return true;
     fail:
