@@ -13,6 +13,7 @@
 #include "multiview_detect.h"
 #include "gles_init.h"
 #include "xr_linear_algebra.h"
+#include "xr_input.h"
 
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -22,6 +23,7 @@
 
 #define LOG_TAG __FILE_NAME__
 #include "log.h"
+#include "nocolor_program.h"
 
 typedef struct {
     GLuint vbo;
@@ -191,8 +193,6 @@ static bool loadModelDrawData(model_t* model, asset_info_t* assetInfo, off64_t *
     GL_RETURN(true, false, "loadModelDrawData failed: %x", error);
 }
 
-
-
 static void assignTextureUnit(GLenum textureUnit, GLuint samplerIndex, const texture_t texture) {
     GL_SAFEPOINT;
     LOGI("TMU assign: %i %i (%x %i)", textureUnit - GL_TEXTURE0, samplerIndex, texture.target, texture.name);
@@ -312,7 +312,7 @@ static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
         XrFovf projectionFov = projectionView.fov;
 
         XrMatrix4x4f_CreateIdentity(&pv);
-        XrMatrix4x4f_CreateProjectionFov(&projection, projectionFov, 0.1, 1000);
+        XrMatrix4x4f_CreateProjectionFov(&projection, projectionFov, 0.1f, 1000);
         XrMatrix4x4f_CreateViewMatrix(&view, &pose.position, &pose.orientation);
 
         XrMatrix4x4f_Multiply(&pv, &projection, &view);
@@ -320,7 +320,7 @@ static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
     }
     {
         XrMatrix4x4f model_translate, model_rotate, model;
-        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5, -2, -15.5);
+        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
         XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
         XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
         memcpy(&matrixBuffer[16*xrinfo.nViews], &model.m, sizeof(float[16]));
@@ -362,9 +362,33 @@ void renderFrame(frame_begin_end_state_t *state) {
     }
 
     {
+        int dominant = 1; // TODO: right hand? also DOMINANT HAND
+
+        XrMatrix4x4f model_translate, model_rotate, model, inverted;
+        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
+        XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
+        XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+        XrMatrix4x4f_Invert(&inverted, &model);
+
+        XrPosef hand = xrInput.handPose[dominant];
+        XrVector3f worldSpace;
+        XrMatrix4x4f_TransformVector3f(&worldSpace, &inverted, &hand.position);
+
         XrVector3f lineColor = {1, 0, 0};
-        XrVector3f start = {3, 8, 21};
-        XrVector3f end = {-5, 4, 21};
+        XrVector3f start = worldSpace;
+
+        XrVector3f direction = {0, 1, 1};
+
+        XrMatrix4x4f orientation;
+        XrMatrix4x4f_CreateFromQuaternion(&orientation, &hand.orientation);
+
+        XrVector3f result;
+        XrMatrix4x4f_TransformVector3f(&result, &orientation, &direction);
+        result.y = -result.y;
+
+        XrVector3f end;
+        XrVector3f_Add(&end, &result, &start);
+
         uploadLineModelData(&rs.line, lineColor, start, end);
     }
 
