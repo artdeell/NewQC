@@ -407,6 +407,13 @@ static bool rayIntersectsScreen(XrVector3f rayOrigin, XrVector3f rayVector, XrVe
     return rayIntersectsTriangle(rayOrigin, rayVector, screenTri1, outIntersectionPoint) || rayIntersectsTriangle(rayOrigin, rayVector, screenTri2, outIntersectionPoint);
 }
 
+static bool normalizeVectorToScreen(XrVector2f* out, XrVector3f point) {
+    if (point.z != screenTri1[0].z) return false; // point is not on screen
+    out->x = (point.x + 5) / 8;
+    out->y = (point.y - 4) / 4;
+    return true;
+}
+
 static void getControllerRay(int controller, XrMatrix4x4f model, XrVector3f* startOut, XrVector3f* endOut) {
     XrMatrix4x4f inverted;
     XrMatrix4x4f_Invert(&inverted, &model);
