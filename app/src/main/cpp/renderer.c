@@ -23,7 +23,6 @@
 
 #define LOG_TAG __FILE_NAME__
 #include "log.h"
-#include "nocolor_program.h"
 
 typedef struct {
     GLuint vbo;
