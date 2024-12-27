@@ -300,7 +300,7 @@ static void resizeDepthBuffers(const XrExtent2Di newExtent) {
     rs.depthSize = newExtent;
 }
 
-static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
+static void calculateProjectionViewMatrices(frame_begin_end_state_t *state, XrMatrix4x4f* modelOut) {
     float matrixBuffer[3 * 16 * sizeof(GLfloat)];
     for(uint32_t i = 0; i < xrinfo.nViews; i++) {
         XrMatrix4x4f projection, view, pv;
@@ -323,6 +323,7 @@ static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
         XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
         XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
         XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+        memcpy(&modelOut[0], &model.m, sizeof(float[16]));
         memcpy(&matrixBuffer[16*xrinfo.nViews], &model.m, sizeof(float[16]));
     }
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(matrixBuffer), matrixBuffer);
@@ -402,6 +403,39 @@ static bool rayIntersectsTriangle(XrVector3f rayOrigin, XrVector3f rayVector, Xr
     }
 }
 
+static bool rayIntersectsScreen(XrVector3f rayOrigin, XrVector3f rayVector, XrVector3f* outIntersectionPoint) {
+    return rayIntersectsTriangle(rayOrigin, rayVector, screenTri1, outIntersectionPoint) || rayIntersectsTriangle(rayOrigin, rayVector, screenTri2, outIntersectionPoint);
+}
+
+static void getControllerRay(int controller, XrMatrix4x4f model, XrVector3f* startOut, XrVector3f* endOut) {
+    XrMatrix4x4f inverted;
+    XrMatrix4x4f_Invert(&inverted, &model);
+
+    XrPosef hand = xrInput.handPose[controller];
+    XrVector3f worldSpace;
+    XrMatrix4x4f_TransformVector3f(&worldSpace, &inverted, &hand.position);
+
+    XrVector3f start = worldSpace;
+
+    XrVector3f direction = {0, 1, 1};
+
+    XrMatrix4x4f orientation;
+    XrMatrix4x4f_CreateFromQuaternion(&orientation, &hand.orientation);
+
+    XrVector3f result;
+    XrMatrix4x4f_TransformVector3f(&result, &orientation, &direction);
+    result.y = -result.y;
+
+    XrVector3f end;
+    XrVector3f_Add(&end, &result, &start);
+    startOut->x = start.x;
+    startOut->y = start.y;
+    startOut->z = start.z;
+    endOut->x = end.x;
+    endOut->y = end.y;
+    endOut->z = end.z;
+}
+
 void renderFrame(frame_begin_end_state_t *state) {
     XrOffset2Di offset = state->frame.outputRect.offset;
     XrExtent2Di extent = state->frame.outputRect.extent;
@@ -409,7 +443,8 @@ void renderFrame(frame_begin_end_state_t *state) {
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, rs.framebuffer);
 
-    calculateProjectionViewMatrices(state);
+    XrMatrix4x4f model;
+    calculateProjectionViewMatrices(state, &model);
 
     if((offset.x + extent.width) != rs.depthSize.width || (offset.y + extent.height) != rs.depthSize.height) {
         XrExtent2Di depthExtent = {(offset.x + extent.width), (offset.y + extent.height)};
@@ -419,39 +454,20 @@ void renderFrame(frame_begin_end_state_t *state) {
     {
         int dominant = 1; // TODO: right hand? also DOMINANT HAND
 
-        XrMatrix4x4f model_translate, model_rotate, model, inverted;
-        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
-        XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
-        XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
-        XrMatrix4x4f_Invert(&inverted, &model);
-
-        XrPosef hand = xrInput.handPose[dominant];
-        XrVector3f worldSpace;
-        XrMatrix4x4f_TransformVector3f(&worldSpace, &inverted, &hand.position);
+        XrVector3f start, end;
+        getControllerRay(dominant, model, &start, &end);
 
         XrVector3f lineColor = {1, 0, 0};
-        XrVector3f start = worldSpace;
-
-        XrVector3f direction = {0, 1, 1};
-
-        XrMatrix4x4f orientation;
-        XrMatrix4x4f_CreateFromQuaternion(&orientation, &hand.orientation);
-
-        XrVector3f result;
-        XrMatrix4x4f_TransformVector3f(&result, &orientation, &direction);
-        result.y = -result.y;
-
-        XrVector3f end;
-        XrVector3f_Add(&end, &result, &start);
-
         uploadLineModelData(&rs.line, lineColor, start, end);
 
         XrVector3f color = {1, 0, 1};
-        XrVector3f intersection;
-        if (rayIntersectsTriangle(start, result, screenTri1, &intersection)) {
-            uploadLineModelData(&rs.line, color, start, intersection);
-        } else if (rayIntersectsTriangle(start, result, screenTri2, &intersection)) {
-            uploadLineModelData(&rs.line, color, start, intersection);
+        XrVector3f intersection, result;
+        XrVector3f_Sub(&result, &end, &start);
+        XrVector3f_Normalize(&result);
+        if (rayIntersectsScreen(start, result, &intersection)) {
+            uploadLineModelData(&rs.line2, color, start, intersection);
+        } else {
+            uploadLineModelData(&rs.line2, color, start, start); // effectively don't draw
         }
     }
 
