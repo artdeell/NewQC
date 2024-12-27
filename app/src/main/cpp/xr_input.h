@@ -9,7 +9,7 @@
 
 
 typedef struct {
-    XrActionSet actionSet;
+    XrPosef handPose[2];
 } xr_input_t;
 
 extern xr_input_t xrInput;
