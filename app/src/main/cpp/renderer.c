@@ -39,7 +39,7 @@ typedef struct {
 
 struct {
     texture_t atlas, light, surface;
-    model_t worldModel, targetRectModel, line;
+    model_t worldModel, targetRectModel, line, line2;
     world_model_render_program_t worldProgram;
     rendertarget_blit_render_program_t blitProgram;
     singlecolor_render_program_t singlecolorProgram;
@@ -247,6 +247,7 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
         if(!initTvModelDrawLayout(&rs.targetRectModel, (size_t) modelLength, rs.blitProgram)) return false;
     }
     createLineModel(&rs.line);
+    createLineModel(&rs.line2);
     GL_SAFEPOINT;
 
     const float mat_array[3*16*sizeof(GLfloat)];
@@ -340,10 +341,65 @@ static void drawPass(GLuint projIndex) {
     drawModel(rs.worldModel, projIndex);
     drawModel(rs.targetRectModel, projIndex);
     drawModel(rs.line, projIndex);
+    drawModel(rs.line2, projIndex);
 }
 
 GLuint getRenderTargetName() {
     return rs.surface.name;
+}
+
+static XrVector3f screenTri1[3] =  {
+        { 3, 8, 21.9f},
+        {-5, 8, 21.9f},
+        {-5, 4, 21.9f},
+};
+static XrVector3f screenTri2[3] =  {
+        { 3, 8, 21.9f},
+        {-5, 4, 21.9f},
+        { 3, 4, 21.9f}
+};
+
+static bool rayIntersectsTriangle(XrVector3f rayOrigin, XrVector3f rayVector, XrVector3f triangle[3], XrVector3f* outIntersectionPoint) {
+    static const float EPSILON = 0.000001f;
+    XrVector3f vertex0 = triangle[0];
+    XrVector3f vertex1 = triangle[1];
+    XrVector3f vertex2 = triangle[2];
+    XrVector3f edge1, edge2, h, s, q;
+    float a, f, u ,v;
+
+    XrVector3f_Sub(&edge1, &vertex1, &vertex0);
+    XrVector3f_Sub(&edge2, &vertex2, &vertex0);
+    XrVector3f_Cross(&h, &rayVector, &edge2);
+    a = XrVector3f_Dot(&edge1, &h);
+
+    if (a > -EPSILON && a < EPSILON) {
+        return false; // ray is parallel
+    }
+
+    f = 1.0f / a;
+    XrVector3f_Sub(&s, &rayOrigin, &vertex0);
+    u = f * XrVector3f_Dot(&s, &h);
+
+    if (u < 0.0f || u > 1.0f) {
+        return false;
+    }
+
+    XrVector3f_Cross(&q, &s, &edge1);
+    v = f * XrVector3f_Dot(&rayVector, &q);
+
+    if (v < 0.0f || u + v > 1.0f) {
+        return false;
+    }
+
+    float t = f * XrVector3f_Dot(&edge2, &q);
+    if (t > EPSILON) {
+        XrVector3f len;
+        XrVector3f_Scale(&len, &rayVector, t);
+        XrVector3f_Add(outIntersectionPoint, &rayOrigin, &len);
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void renderFrame(frame_begin_end_state_t *state) {
@@ -389,6 +445,14 @@ void renderFrame(frame_begin_end_state_t *state) {
         XrVector3f_Add(&end, &result, &start);
 
         uploadLineModelData(&rs.line, lineColor, start, end);
+
+        XrVector3f color = {1, 0, 1};
+        XrVector3f intersection;
+        if (rayIntersectsTriangle(start, result, screenTri1, &intersection)) {
+            uploadLineModelData(&rs.line, color, start, intersection);
+        } else if (rayIntersectsTriangle(start, result, screenTri2, &intersection)) {
+            uploadLineModelData(&rs.line, color, start, intersection);
+        }
     }
 
 
