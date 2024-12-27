@@ -20,9 +20,6 @@ static float vibrate[2] = {0, 0};
 static XrPath handPaths[2];
 static XrSpace handPoseSpace[2];
 static XrActionStatePose handPoseState[2] = {{XR_TYPE_ACTION_STATE_POSE}, {XR_TYPE_ACTION_STATE_POSE}};
-static XrPosef handPose[2] = {
-        {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.5f}},
-        {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.5f}}};
 
 bool createActionSet() {
     XrActionSetCreateInfo actionSetCreateInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
@@ -143,7 +140,7 @@ bool pollActions(XrTime predictedTime) {
             if (XR_UNQUALIFIED_SUCCESS(res) &&
                 (spaceLocation.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0 &&
                 (spaceLocation.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0) {
-                handPose[i] = spaceLocation.pose;
+                xrInput.handPose[i] = spaceLocation.pose;
             } else {
                 handPoseState[i].isActive = false;
             }
