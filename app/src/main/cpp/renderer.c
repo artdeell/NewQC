@@ -452,7 +452,7 @@ void renderFrame(frame_begin_end_state_t *state) {
     }
 
     {
-        int dominant = 1; // TODO: right hand? also DOMINANT HAND
+        int dominant = xrinfo.dominantHand;
 
         XrVector3f start, end;
         getControllerRay(dominant, model, &start, &end);

@@ -24,6 +24,7 @@ typedef struct {
     XrViewConfigurationType configurationType;
     render_target_t renderTarget;
     uint32_t nViews;
+    int dominantHand;
     bool hasSession;
 } xr_state_t;
 
