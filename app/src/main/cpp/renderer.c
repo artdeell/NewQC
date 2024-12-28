@@ -300,6 +300,15 @@ static void resizeDepthBuffers(const XrExtent2Di newExtent) {
     rs.depthSize = newExtent;
 }
 
+// this is for ease of access for when you need the model matrix to calculate the controller ray but don't need the projection or view
+static void calculateModelMatrix(XrMatrix4x4f* modelOut) {
+    XrMatrix4x4f model_translate, model_rotate, model;
+    XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
+    XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
+    XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+    memcpy(&modelOut[0], &model.m, sizeof(float[16]));
+}
+
 static void calculateProjectionViewMatrices(frame_begin_end_state_t *state, XrMatrix4x4f* modelOut) {
     float matrixBuffer[3 * 16 * sizeof(GLfloat)];
     for(uint32_t i = 0; i < xrinfo.nViews; i++) {
@@ -319,10 +328,8 @@ static void calculateProjectionViewMatrices(frame_begin_end_state_t *state, XrMa
         memcpy(&matrixBuffer[16*i], &pv.m, sizeof(float[16]));
     }
     {
-        XrMatrix4x4f model_translate, model_rotate, model;
-        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
-        XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
-        XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+        XrMatrix4x4f model;
+        calculateModelMatrix(&model);
         memcpy(&modelOut[0], &model.m, sizeof(float[16]));
         memcpy(&matrixBuffer[16*xrinfo.nViews], &model.m, sizeof(float[16]));
     }
@@ -347,100 +354,6 @@ static void drawPass(GLuint projIndex) {
 
 GLuint getRenderTargetName() {
     return rs.surface.name;
-}
-
-static XrVector3f screenTri1[3] =  {
-        { 3, 8, 21.9f},
-        {-5, 8, 21.9f},
-        {-5, 4, 21.9f},
-};
-static XrVector3f screenTri2[3] =  {
-        { 3, 8, 21.9f},
-        {-5, 4, 21.9f},
-        { 3, 4, 21.9f}
-};
-
-static bool rayIntersectsTriangle(XrVector3f rayOrigin, XrVector3f rayVector, XrVector3f triangle[3], XrVector3f* outIntersectionPoint) {
-    static const float EPSILON = 0.000001f;
-    XrVector3f vertex0 = triangle[0];
-    XrVector3f vertex1 = triangle[1];
-    XrVector3f vertex2 = triangle[2];
-    XrVector3f edge1, edge2, h, s, q;
-    float a, f, u ,v;
-
-    XrVector3f_Sub(&edge1, &vertex1, &vertex0);
-    XrVector3f_Sub(&edge2, &vertex2, &vertex0);
-    XrVector3f_Cross(&h, &rayVector, &edge2);
-    a = XrVector3f_Dot(&edge1, &h);
-
-    if (a > -EPSILON && a < EPSILON) {
-        return false; // ray is parallel
-    }
-
-    f = 1.0f / a;
-    XrVector3f_Sub(&s, &rayOrigin, &vertex0);
-    u = f * XrVector3f_Dot(&s, &h);
-
-    if (u < 0.0f || u > 1.0f) {
-        return false;
-    }
-
-    XrVector3f_Cross(&q, &s, &edge1);
-    v = f * XrVector3f_Dot(&rayVector, &q);
-
-    if (v < 0.0f || u + v > 1.0f) {
-        return false;
-    }
-
-    float t = f * XrVector3f_Dot(&edge2, &q);
-    if (t > EPSILON) {
-        XrVector3f len;
-        XrVector3f_Scale(&len, &rayVector, t);
-        XrVector3f_Add(outIntersectionPoint, &rayOrigin, &len);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-static bool rayIntersectsScreen(XrVector3f rayOrigin, XrVector3f rayVector, XrVector3f* outIntersectionPoint) {
-    return rayIntersectsTriangle(rayOrigin, rayVector, screenTri1, outIntersectionPoint) || rayIntersectsTriangle(rayOrigin, rayVector, screenTri2, outIntersectionPoint);
-}
-
-static bool normalizeVectorToScreen(XrVector2f* out, XrVector3f point) {
-    if (point.z != screenTri1[0].z) return false; // point is not on screen
-    out->x = (point.x + 5) / 8;
-    out->y = (point.y - 4) / 4;
-    return true;
-}
-
-static void getControllerRay(int controller, XrMatrix4x4f model, XrVector3f* startOut, XrVector3f* endOut) {
-    XrMatrix4x4f inverted;
-    XrMatrix4x4f_Invert(&inverted, &model);
-
-    XrPosef hand = xrInput.handPose[controller];
-    XrVector3f worldSpace;
-    XrMatrix4x4f_TransformVector3f(&worldSpace, &inverted, &hand.position);
-
-    XrVector3f start = worldSpace;
-
-    XrVector3f direction = {0, 1, 1};
-
-    XrMatrix4x4f orientation;
-    XrMatrix4x4f_CreateFromQuaternion(&orientation, &hand.orientation);
-
-    XrVector3f result;
-    XrMatrix4x4f_TransformVector3f(&result, &orientation, &direction);
-    result.y = -result.y;
-
-    XrVector3f end;
-    XrVector3f_Add(&end, &result, &start);
-    startOut->x = start.x;
-    startOut->y = start.y;
-    startOut->z = start.z;
-    endOut->x = end.x;
-    endOut->y = end.y;
-    endOut->z = end.z;
 }
 
 void renderFrame(frame_begin_end_state_t *state) {
