@@ -13,6 +13,7 @@
 #include "multiview_detect.h"
 #include "gles_init.h"
 #include "xr_linear_algebra.h"
+#include "xr_input.h"
 
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -38,7 +39,7 @@ typedef struct {
 
 struct {
     texture_t atlas, light, surface;
-    model_t worldModel, targetRectModel, line;
+    model_t worldModel, targetRectModel, leftControllerRay, rightControllerRay;
     world_model_render_program_t worldProgram;
     rendertarget_blit_render_program_t blitProgram;
     singlecolor_render_program_t singlecolorProgram;
@@ -191,8 +192,6 @@ static bool loadModelDrawData(model_t* model, asset_info_t* assetInfo, off64_t *
     GL_RETURN(true, false, "loadModelDrawData failed: %x", error);
 }
 
-
-
 static void assignTextureUnit(GLenum textureUnit, GLuint samplerIndex, const texture_t texture) {
     GL_SAFEPOINT;
     LOGI("TMU assign: %i %i (%x %i)", textureUnit - GL_TEXTURE0, samplerIndex, texture.target, texture.name);
@@ -247,7 +246,8 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
         if(!loadModelDrawData(&rs.targetRectModel, &modelAssetInfo, &modelLength)) return false;
         if(!initTvModelDrawLayout(&rs.targetRectModel, (size_t) modelLength, rs.blitProgram)) return false;
     }
-    createLineModel(&rs.line);
+    createLineModel(&rs.leftControllerRay);
+    createLineModel(&rs.rightControllerRay);
     GL_SAFEPOINT;
 
     const float mat_array[3*16*sizeof(GLfloat)];
@@ -300,7 +300,16 @@ static void resizeDepthBuffers(const XrExtent2Di newExtent) {
     rs.depthSize = newExtent;
 }
 
-static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
+// this is for ease of access for when you need the model matrix to calculate the controller ray but don't need the projection or view
+static void calculateModelMatrix(XrMatrix4x4f* modelOut) {
+    XrMatrix4x4f model_translate, model_rotate, model;
+    XrMatrix4x4f_CreateTranslation(&model_translate, 1.5f, -2, -15.5f);
+    XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
+    XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+    memcpy(&modelOut[0], &model.m, sizeof(float[16]));
+}
+
+static void calculateProjectionViewMatrices(frame_begin_end_state_t *state, XrMatrix4x4f* modelOut) {
     float matrixBuffer[3 * 16 * sizeof(GLfloat)];
     for(uint32_t i = 0; i < xrinfo.nViews; i++) {
         XrMatrix4x4f projection, view, pv;
@@ -312,17 +321,16 @@ static void calculateProjectionViewMatrices(frame_begin_end_state_t *state) {
         XrFovf projectionFov = projectionView.fov;
 
         XrMatrix4x4f_CreateIdentity(&pv);
-        XrMatrix4x4f_CreateProjectionFov(&projection, projectionFov, 0.1, 1000);
+        XrMatrix4x4f_CreateProjectionFov(&projection, projectionFov, 0.1f, 1000);
         XrMatrix4x4f_CreateViewMatrix(&view, &pose.position, &pose.orientation);
 
         XrMatrix4x4f_Multiply(&pv, &projection, &view);
         memcpy(&matrixBuffer[16*i], &pv.m, sizeof(float[16]));
     }
     {
-        XrMatrix4x4f model_translate, model_rotate, model;
-        XrMatrix4x4f_CreateTranslation(&model_translate, 1.5, -2, -15.5);
-        XrMatrix4x4f_CreateRotation(&model_rotate, 0, 180, 0);
-        XrMatrix4x4f_Multiply(&model, &model_rotate, &model_translate);
+        XrMatrix4x4f model;
+        calculateModelMatrix(&model);
+        memcpy(&modelOut[0], &model.m, sizeof(float[16]));
         memcpy(&matrixBuffer[16*xrinfo.nViews], &model.m, sizeof(float[16]));
     }
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(matrixBuffer), matrixBuffer);
@@ -340,7 +348,8 @@ static void drawPass(GLuint projIndex) {
 
     drawModel(rs.worldModel, projIndex);
     drawModel(rs.targetRectModel, projIndex);
-    drawModel(rs.line, projIndex);
+    drawModel(rs.leftControllerRay, projIndex);
+    drawModel(rs.rightControllerRay, projIndex);
 }
 
 GLuint getRenderTargetName() {
@@ -354,7 +363,8 @@ void renderFrame(frame_begin_end_state_t *state) {
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, rs.framebuffer);
 
-    calculateProjectionViewMatrices(state);
+    XrMatrix4x4f model;
+    calculateProjectionViewMatrices(state, &model);
 
     if((offset.x + extent.width) != rs.depthSize.width || (offset.y + extent.height) != rs.depthSize.height) {
         XrExtent2Di depthExtent = {(offset.x + extent.width), (offset.y + extent.height)};
@@ -362,10 +372,22 @@ void renderFrame(frame_begin_end_state_t *state) {
     }
 
     {
-        XrVector3f lineColor = {1, 0, 0};
-        XrVector3f start = {3, 8, 21};
-        XrVector3f end = {-5, 4, 21};
-        uploadLineModelData(&rs.line, lineColor, start, end);
+        for (int i = 0; i < 2; i++) {
+            model_t* line = i == 0 ? &rs.leftControllerRay : &rs.rightControllerRay;
+            XrVector3f start, end;
+            getControllerRay(i, model, &start, &end);
+
+            XrVector3f lineColor = {1, 0, 0};
+            uploadLineModelData(line, lineColor, start, end);
+
+            XrVector3f color = {1, 0, 1};
+            XrVector3f intersection, result;
+            XrVector3f_Sub(&result, &end, &start);
+            XrVector3f_Normalize(&result);
+            if (rayIntersectsScreen(start, result, &intersection)) {
+                uploadLineModelData(line, color, start, intersection);
+            }
+        }
     }
 
 
