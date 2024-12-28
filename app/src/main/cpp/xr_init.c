@@ -139,6 +139,7 @@ static bool createReferenceSpace() {
     XR_FAILRETURN(xrCreateReferenceSpace(xrinfo.session, &referenceSpaceCreateInfo, &xrinfo.localReferenceSpace), false);
     return true;
 }
+
 static bool createViewSurface() {
     xrinfo.configurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     uint32_t viewCount;
@@ -196,6 +197,7 @@ static bool createViewSurface() {
         xrinfo.renderTarget.swapchainTextures[j] = glesImages[j].image;
     }
     xrinfo.nViews = viewCount;
+    xrinfo.dominantHand = 1; // TODO: put this somewhere else, load user preferences and see there.
 
     return true;
     free_swapchain:
