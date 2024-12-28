@@ -39,7 +39,7 @@ typedef struct {
 
 struct {
     texture_t atlas, light, surface;
-    model_t worldModel, targetRectModel, line, line2;
+    model_t worldModel, targetRectModel, leftControllerRay, rightControllerRay;
     world_model_render_program_t worldProgram;
     rendertarget_blit_render_program_t blitProgram;
     singlecolor_render_program_t singlecolorProgram;
@@ -246,8 +246,8 @@ static bool internalInitRenderer(AAssetManager *assetManager) {
         if(!loadModelDrawData(&rs.targetRectModel, &modelAssetInfo, &modelLength)) return false;
         if(!initTvModelDrawLayout(&rs.targetRectModel, (size_t) modelLength, rs.blitProgram)) return false;
     }
-    createLineModel(&rs.line);
-    createLineModel(&rs.line2);
+    createLineModel(&rs.leftControllerRay);
+    createLineModel(&rs.rightControllerRay);
     GL_SAFEPOINT;
 
     const float mat_array[3*16*sizeof(GLfloat)];
@@ -348,8 +348,8 @@ static void drawPass(GLuint projIndex) {
 
     drawModel(rs.worldModel, projIndex);
     drawModel(rs.targetRectModel, projIndex);
-    drawModel(rs.line, projIndex);
-    drawModel(rs.line2, projIndex);
+    drawModel(rs.leftControllerRay, projIndex);
+    drawModel(rs.rightControllerRay, projIndex);
 }
 
 GLuint getRenderTargetName() {
@@ -372,22 +372,21 @@ void renderFrame(frame_begin_end_state_t *state) {
     }
 
     {
-        int dominant = xrinfo.dominantHand;
+        for (int i = 0; i < 2; i++) {
+            model_t* line = i == 0 ? &rs.leftControllerRay : &rs.rightControllerRay;
+            XrVector3f start, end;
+            getControllerRay(i, model, &start, &end);
 
-        XrVector3f start, end;
-        getControllerRay(dominant, model, &start, &end);
+            XrVector3f lineColor = {1, 0, 0};
+            uploadLineModelData(line, lineColor, start, end);
 
-        XrVector3f lineColor = {1, 0, 0};
-        uploadLineModelData(&rs.line, lineColor, start, end);
-
-        XrVector3f color = {1, 0, 1};
-        XrVector3f intersection, result;
-        XrVector3f_Sub(&result, &end, &start);
-        XrVector3f_Normalize(&result);
-        if (rayIntersectsScreen(start, result, &intersection)) {
-            uploadLineModelData(&rs.line2, color, start, intersection);
-        } else {
-            uploadLineModelData(&rs.line2, color, start, start); // effectively don't draw
+            XrVector3f color = {1, 0, 1};
+            XrVector3f intersection, result;
+            XrVector3f_Sub(&result, &end, &start);
+            XrVector3f_Normalize(&result);
+            if (rayIntersectsScreen(start, result, &intersection)) {
+                uploadLineModelData(line, color, start, intersection);
+            }
         }
     }
 
